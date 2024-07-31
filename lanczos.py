@@ -9,38 +9,43 @@ def lanczos_algorithm(msr_matrix, m=100, tol=1e-10):
     Lanczos method to find the largest eigenvalue of a symmetric matrix A.
     
     Parameters:
-    A (numpy.ndarray): Symmetric matrix.
-    m (int): dimension of the Krylov space.
+    msr_matrix (numpy.ndarray): MSR format symmetric matrix.
+    m (int): Dimension of the Krylov space.
+    tol (float): Tolerance for convergence.
 
     Returns:
-    float: Approximation of the largest eigenvalue.
+    tuple: Approximation of the largest eigenvalue, corresponding eigenvector,
+           number of iterations, and overall runtime.
     """
     # Extract information from MSR format file
     jm, vm = get_columns(msr_matrix)
     n = int(jm[0])
 
     # Initialization
-    v_jm1 = np.zeros(n)
-    v_j = np.ones(n) / np.sqrt(n)
-    alpha = np.zeros(m)
-    beta = np.zeros(m)
+    diagonal, off_diagonal = [], []
+    v_k = np.ones(n) / np.sqrt(n)
+    v_km1, beta = 0.0, 0.0
     
     start_time = time.time()
 
-    # Lanczos algorithm
-    for j in range(m):
-        w = msr_matrix_vector_product(jm[1:], vm[1:], v_j, symmetric=True) - beta[j - 1] * v_jm1
-        alpha[j] = np.dot(v_j.conj().T, w)
-        w = w - alpha[j] * v_j
-        beta[j] = np.linalg.norm(w)
+    for i in range(m):
+        # Iteration steps
+        w_prime = msr_matrix_vector_product(jm[1:], vm[1:], v_k, symmetric=True)
+        conj = np.matrix.conjugate(w_prime)
+        alpha = np.dot(conj, v_k)
+        w = w_prime - alpha * v_k - beta * v_km1
+        beta = np.linalg.norm(w)
 
-        v_jm1 = v_j
-        v_j = w / beta[j]
-    
-    beta = beta[:m - 1]  # Note: beta[m] is not needed
+        diagonal.append(np.linalg.norm(alpha))
+        if i < (n-1):
+            off_diagonal.append(beta)
+
+        # Update
+        v_km1 = v_k
+        v_k = w / beta
     
     # Power iteration method to find the largest eigenvalue
-    eigenvalue, eigenvector, k_iter = power_iteration_tridiagonal(alpha, beta, tol)
+    eigenvalue, eigenvector, k_iter = power_iteration_tridiagonal(diagonal, off_diagonal, tol)
 
     overall_runtime = time.time() - start_time
     
@@ -68,11 +73,11 @@ if __name__ == "__main__":
         print(f"Final error: {final_error}")
 
     plt.figure(figsize=(10, 6))
-    plt.semilogy(overall_runtimes, final_errors, linestyle='-', color='b')
+    plt.semilogy(overall_runtimes, final_errors, marker='x', linestyle='-', color='b')
     plt.xlabel('Runtime (seconds)', fontsize=14)
     plt.ylabel('Error', fontsize=14)
     plt.grid(True, which="both", ls="--")
     plt.tight_layout()
-    plt.savefig('error_vs_iteration_power.png', dpi=300)
+    plt.savefig('error_vs_runtime_lanczos.png', dpi=300)
     plt.show()
 
